@@ -48,7 +48,7 @@ Esta guía está dividida en dos partes:
 1. **Clonar y configurar**
    ```bash
    git clone <this-repo>
-   cd sample-aws-devops-agent-terraform
+   cd SampleTerraformdeploy-AWSDevosAgent
    cp terraform.tfvars.example terraform.tfvars
    ```
 
