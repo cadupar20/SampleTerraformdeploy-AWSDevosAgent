@@ -13,6 +13,118 @@ AWS DevOps Agent te ayuda a monitorear y gestionar tu infraestructura de AWS uti
 - Una cuenta de AWS para la cuenta de monitoreo (principal)
 - (Opcional) Una segunda cuenta de AWS para monitoreo entre cuentas
 
+### Configuración de Autenticación AWS
+
+Antes de ejecutar los scripts de despliegue, debes autenticarte en AWS. Existen varias formas de hacerlo:
+
+#### Opción 1: AWS CLI con Access Keys (recomendado para desarrollo local)
+
+```bash
+aws configure
+```
+Te solicitará:
+- **AWS Access Key ID** y **AWS Secret Access Key**: Credenciales de un usuario IAM con permisos suficientes (ver sección "Permisos IAM Requeridos").
+- **Default region**: `us-east-1` (o la región donde deseas desplegar).
+- **Default output format**: `json`
+
+#### Opción 2: Perfil nombrado
+
+```bash
+aws configure --profile devops-agent
+```
+Luego configura la variable de entorno o el proveedor de Terraform para usar ese perfil:
+```bash
+export AWS_PROFILE=devops-agent   # Linux/macOS
+$env:AWS_PROFILE = "devops-agent" # Windows PowerShell
+```
+
+#### Opción 3: Rol de asunción (assume role)
+
+Si usas un rol cross-account o un rol de administración, puedes configurar un perfil que asuma un rol:
+
+```ini
+# ~/.aws/config
+[profile devops-admin]
+region = us-east-1
+role_arn = arn:aws:iam::<CUENTA_MONITOREO>:role/NombreDelRol
+source_profile = default
+```
+
+#### Opción 4: Variables de entorno
+
+```bash
+export AWS_ACCESS_KEY_ID=AKIAXXXXXXXX
+export AWS_SECRET_ACCESS_KEY=xxxxxxxx
+export AWS_DEFAULT_REGION=us-east-1
+```
+```powershell
+# Windows PowerShell
+$env:AWS_ACCESS_KEY_ID = "AKIAXXXXXXXX"
+$env:AWS_SECRET_ACCESS_KEY = "xxxxxxxx"
+$env:AWS_DEFAULT_REGION = "us-east-1"
+```
+
+> **Nota:** Los scripts `deploy.sh` y `deploy.ps1` verifican la autenticación ejecutando `aws sts get-caller-identity`. Si este comando falla, los scripts mostrarán un error y se detendrán.
+
+### Permisos IAM Requeridos
+
+Para desplegar todos los recursos de este proyecto, la identidad AWS (usuario o rol) utilizada para ejecutar Terraform debe tener los siguientes permisos:
+
+#### Parte 1 — Permisos en la Cuenta de Monitoreo
+
+| Permiso IAM | Recurso | Propósito |
+|-------------|---------|-----------|
+| `iam:CreateRole` | `arn:aws:iam::*:role/DevOpsAgentRole-*` | Crear roles IAM del Agent Space y Operador |
+| `iam:DeleteRole` | `arn:aws:iam::*:role/DevOpsAgentRole-*` | Eliminar roles IAM durante limpieza |
+| `iam:GetRole` | `*` | Leer roles IAM existentes |
+| `iam:PassRole` | `arn:aws:iam::*:role/DevOpsAgentRole-*` | Pasar roles al servicio DevOps Agent |
+| `iam:AttachRolePolicy` | `arn:aws:iam::*:role/DevOpsAgentRole-*` | Adjuntar políticas administradas a roles |
+| `iam:DetachRolePolicy` | `arn:aws:iam::*:role/DevOpsAgentRole-*` | Desadjuntar políticas durante limpieza |
+| `iam:PutRolePolicy` | `arn:aws:iam::*:role/DevOpsAgentRole-*` | Crear políticas inline en roles |
+| `iam:DeleteRolePolicy` | `arn:aws:iam::*:role/DevOpsAgentRole-*` | Eliminar políticas inline durante limpieza |
+| `aidevops:CreateAgentSpace` | `*` | Crear el Agent Space |
+| `aidevops:DeleteAgentSpace` | `*` | Eliminar el Agent Space |
+| `aidevops:GetAgentSpace` | `*` | Leer configuración del Agent Space |
+| `aidevops:CreateAssociation` | `*` | Asociar cuentas al Agent Space |
+| `aidevops:DeleteAssociation` | `*` | Eliminar asociaciones |
+| `iam:CreateServiceLinkedRole` | `arn:aws:iam::*:role/aws-service-role/resource-explorer-2.amazonaws.com/AWSServiceRoleForResourceExplorer` | Crear rol vinculado de Resource Explorer |
+| `sts:GetCallerIdentity` | `*` | Verificar identidad AWS (usado por los scripts) |
+
+#### Parte 2 — Permisos Adicionales en la Cuenta de Servicio (Secundaria)
+
+Si implementas monitoreo cross-account (Parte 2), la identidad utilizada en el **proveedor `aws.service`** debe tener estos permisos en la cuenta secundaria:
+
+| Permiso IAM | Recurso | Propósito |
+|-------------|---------|-----------|
+| `iam:CreateRole` | `arn:aws:iam::*:role/DevOpsAgentRole-*` | Crear rol cross-account |
+| `iam:CreateRole` | `arn:aws:iam::*:role/echo-service-tf-role` | Crear rol de ejecución de Lambda |
+| `iam:AttachRolePolicy` | `arn:aws:iam::*:role/DevOpsAgentRole-*` | Adjuntar política al rol cross-account |
+| `iam:AttachRolePolicy` | `arn:aws:iam::*:role/echo-service-tf-role` | Adjuntar política al rol de Lambda |
+| `iam:PassRole` | `arn:aws:iam::*:role/echo-service-tf-role` | Pasar rol a Lambda |
+| `lambda:CreateFunction` | `*` | Crear función Lambda echo |
+| `lambda:DeleteFunction` | `*` | Eliminar función Lambda |
+| `lambda:InvokeFunction` | `*` | Invocar función Lambda para pruebas |
+| `iam:CreateServiceLinkedRole` | `arn:aws:iam::*:role/aws-service-role/resource-explorer-2.amazonaws.com/AWSServiceRoleForResourceExplorer` | Crear rol vinculado de Resource Explorer |
+
+#### Política Administrada Recomendada
+
+Para simplificar, puedes usar la política administrada de AWS **`AdministratorAccess`** (o `arn:aws:iam::aws:policy/AdministratorAccess`) en un entorno de desarrollo o pruebas. Para entornos productivos, se recomienda crear una política personalizada con los permisos específicos listados arriba.
+
+#### Verificación de Permisos
+
+Puedes verificar que tu identidad AWS tiene los permisos necesarios ejecutando:
+
+```bash
+# Verificar identidad actual
+aws sts get-caller-identity
+
+# Verificar que puedes crear roles IAM (simulado)
+aws iam create-role --role-name test-permissions --assume-role-policy-document '{"Version":"2012-10-17","Statement":[{"Effect":"Allow","Principal":{"Service":"ec2.amazonaws.com"},"Action":"sts:AssumeRole"}]}' --no-cli-pager
+
+# Limpiar el rol de prueba
+aws iam delete-role --role-name test-permissions
+```
+
 ## Qué cubre esta guía
 
 Esta guía está dividida en dos partes:
