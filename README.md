@@ -253,6 +253,16 @@ Esta guía está dividida en dos partes:
 | `name_postfix` | Sufijo para los nombres de los roles IAM | `""` |
 | `tags` | Etiquetas para todos los recursos | Ver variables.tf |
 
+## Referencias y Mejores Prácticas
+
+- **Guía oficial de inicio rápido con Terraform:** [Getting started with AWS DevOps Agent using Terraform](https://docs.aws.amazon.com/devopsagent/latest/userguide/getting-started-with-aws-devops-agent-getting-started-with-aws-devops-agent-using-terraform.html) — Documentación oficial de AWS que cubre los pasos iniciales para configurar AWS DevOps Agent con Terraform.
+
+- **Mejores prácticas para entornos productivos:** [Best Practices for deploying AWS DevOps Agent in production](https://aws.amazon.com/es/blogs/devops/best-practices-for-deploying-aws-devops-agent-in-production/) — Publicado en el blog de AWS DevOps, cubre aspectos clave como configuración de IAM, monitoreo multi-cuenta, seguridad y optimización de recursos.
+
+- **Arquitectura, funcionamiento y demo de AWS DevOps Agent:** [AWS DevOps Agent Explained: Architecture, Setup, and Real Root Cause Demo (CloudWatch, EKS)](https://dev.to/aws-builders/aws-devops-agent-explained-architecture-setup-and-real-root-cause-demo-cloudwatch-eks-ng7) — Artículo en dev.to que explica la arquitectura interna, el proceso de discovery, la configuración paso a paso y una demostración práctica de análisis de causa raíz con CloudWatch y EKS.
+
+- **Detección de desviación de infraestructura con Terraform State MCP Server:** [Terraform State MCP Server for Amazon DevOps Agent](https://github.com/aws-samples/sample-devops-agent-terraform-mcp/tree/main) — Repositorio de ejemplo de AWS que implementa un servidor MCP (Model Context Protocol) para que DevOps Agent detecte cambios de arquitectura (drift) comparando el estado de Terraform (tfstate) contra los recursos en vivo de AWS y Kubernetes. Incluye una función Lambda que descubre automáticamente archivos `.tfstate` desde buckets S3 etiquetados, los filtra y los expone al agente para su análisis.
+
 ## Solución de Problemas
 
 - Retrasos en la propagación de IAM: La configuración incluye un `time_sleep` de 30 segundos entre la creación del rol IAM y la creación del Agent Space. El servicio DevOps Agent valida la política de confianza del rol operador durante la creación del Agent Space, y esto puede fallar si IAM no se ha propagado completamente. Si aún ves errores de política de confianza, espera un minuto y ejecuta `terraform apply` nuevamente — los roles IAM ya existirán y el apply continuará desde donde se quedó.
